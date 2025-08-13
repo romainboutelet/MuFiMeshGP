@@ -15,8 +15,7 @@ MuFiMeshGP(
   interaction = NULL,
   mean.known = NULL,
   H.known = NULL,
-  param.known = NULL,
-  gradient = FALSE,
+  gradient = TRUE,
   init = NULL,
   single_fidelity = F,
   param.bounds = NULL,
@@ -54,10 +53,8 @@ term specify the polynomial order (\code{"linear} or \code{"quadratic"}) of
 \item{mean.known}{Specifies the mean if \code{"SK"} as \code{trend.type},
 scalar.}
 
-\item{H.known, param.known}{allow the user to specify the value of H as
-\code{H.known}, a scalar in (0,1), and/or of the rest of the hyperparameters
-as \code{param.known} a vector containing, in order, \code{phi1sq},
-\code{phi2sq}, \code{sigma1sq}, \code{sigma2sq}.}
+\item{H.known}{allow the user to specify the value of H as
+\code{H.known}, a scalar in (0,1).}
 
 \item{gradient}{whether or not the gradient of the log-likelihood shouldbe
 used in the parameter estimation.}
@@ -69,8 +66,8 @@ as a single fidelity Gaussian Process. This will set \code{sigma2sq} as 0.}
 
 \item{param.bounds}{a list with two arguments(\code{lower} and \code{upper})
  describing the bounds used for MLE optimization of \code{phi1sq} and \code{phi2sq}.
-Each argument should be a vector of length equal to the column dimension
- of the matrix \code{X}. If \code{NULL} the bounds of \code{phi1sq} and \code{phi2sq}
+Each argument should be a vector of length \code{ncol(X)}.
+If \code{NULL} the bounds of \code{phi1sq} and \code{phi2sq}
 are specified automatically from the design matrix.}
 
 \item{iso}{whether the covariance function will be isotropic (\code{TRUE}

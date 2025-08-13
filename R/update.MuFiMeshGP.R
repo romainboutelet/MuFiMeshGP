@@ -109,7 +109,6 @@ update.MuFiMeshGP <- function(
   trend.pol <- object$used_args$trend.pol
   interaction <- object$used_args$interaction
   H.known <- object$used_args$H.known
-  param.known <- object$used_args$param.known
   param.bounds <- object$used_args$param.bounds
   mean.known <- object$used_args$mean.known
   l <- object$used_args$l
@@ -149,7 +148,6 @@ update.MuFiMeshGP <- function(
         trend.pol = trend.pol,
         interaction = interaction,
         H.known = H.known,
-        param.known = param.known,
         param.bounds = param.bounds,
         mean.known = mean.known,
         l = l,
@@ -173,7 +171,6 @@ update.MuFiMeshGP <- function(
       trend.pol = trend.pol,
       interaction = interaction,
       H.known = H.known,
-      param.known = param.known,
       param.bounds = param.bounds,
       mean.known = mean.known,
       l = l,
@@ -234,7 +231,6 @@ update.MuFiMeshGP <- function(
         trend.pol = trend.pol,
         interaction = interaction,
         H.known = H.known,
-        param.known = param.known,
         param.bounds = param.bounds,
         mean.known = mean.known,
         l = l,

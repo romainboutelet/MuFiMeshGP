@@ -1,3 +1,69 @@
+#' Binder function for gr_MLE
+#'
+#' @noRd
+
+gr_MLE <- function(
+  trend.type,
+  par,
+  X,
+  t,
+  Y,
+  l,
+  covtype,
+  myregF,
+  mean.known,
+  H.known,
+  iso = FALSE,
+  nugget = NULL
+) {
+  if (covtype == "Matern5_2") {
+    stop("'Matern5_2' is not available at the moment")
+  } else if (covtype == "Matern3_2") {
+    stop("'Matern3_2' is not available at the moment")
+  }
+  if (trend.type == "SK") {
+    return(gr_MLE_SK(
+      par = par,
+      X = X,
+      t = t,
+      Y = Y,
+      l = l,
+      covtype = covtype,
+      mean.known = mean.known,
+      H.known = H.known,
+      iso = iso,
+      nugget = nugget
+    ))
+  } else if (trend.type == "OK") {
+    return(gr_RMLE_OK(
+      par = par,
+      X = X,
+      t = t,
+      Y = Y,
+      l = l,
+      covtype = covtype,
+      myregF = myregF,
+      H.known = H.known,
+      iso = iso,
+      nugget = nugget
+    ))
+  } else if (trend.type == "UK") {
+    return(gr_RMLE_UK(
+      par = par,
+      X = X,
+      t = t,
+      Y = Y,
+      l = l,
+      covtype = covtype,
+      myregF = myregF,
+      H.known = H.known,
+      iso = iso,
+      nugget = nugget
+    ))
+  }
+}
+
+
 #' Calculates the gradient of the MLE
 #'
 #' @noRd

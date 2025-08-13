@@ -31,10 +31,8 @@
 #'   See \code{\link{regF_gen}} for further details.
 #' @param mean.known Specifies the mean if \code{"SK"} as \code{trend.type},
 #'  scalar.
-#' @param H.known,param.known allow the user to specify the value of H as
-#'  \code{H.known}, a scalar in (0,1), and/or of the rest of the hyperparameters
-#'  as \code{param.known} a vector containing, in order, \code{phi1sq},
-#'  \code{phi2sq}, \code{sigma1sq}, \code{sigma2sq}.
+#' @param H.known allow the user to specify the value of H as
+#'  \code{H.known}, a scalar in (0,1).
 #' @param gradient whether or not the gradient of the log-likelihood shouldbe
 #'  used in the parameter estimation.
 #' @param init Where should the parameter estimation start from, a vector.
@@ -111,8 +109,7 @@ MuFiMeshGP <- function(
   interaction = NULL,
   mean.known = NULL,
   H.known = NULL,
-  param.known = NULL,
-  gradient = FALSE,
+  gradient = TRUE,
   init = NULL,
   single_fidelity = F,
   param.bounds = NULL,
@@ -124,7 +121,9 @@ MuFiMeshGP <- function(
   eps <- sqrt(.Machine$double.eps)
   n <- nrow(X)
   d <- ncol(X)
+  myregF <- NULL
   regF <- NULL
+  Gijs <- NULL
   if (is.null(H.known)) myH <- 0.5 else myH <- H.known
   if (trend.type == "SK" & is.null(mean.known)) {
     stop("mean.known must be specified for SK")
@@ -197,364 +196,170 @@ MuFiMeshGP <- function(
     if (is.null(H.known)) myH <- init$H
   }
   envtmp <- environment()
-  if (trend.type == "SK") {
-    if (!single_fidelity) {
-      fn <- function(par, env) {
-        loglik <- MLE_SK(
+  if (!single_fidelity) {
+    fn <- function(par, env) {
+      loglik <- MLE(
+        trend.type = trend.type,
+        par = par,
+        X = X,
+        t = t,
+        Y = Y,
+        l = l,
+        covtype = covtype,
+        myregF = myregF,
+        mean.known = mean.known,
+        H.known = H.known,
+        iso = iso,
+        nugget = nugget
+      )
+      if (!is.null(env) && !is.na(loglik)) {
+        if (is.null(env$min_loglik) || loglik > env$min_loglik) {
+          env$min_loglik <- loglik
+          env$arg_min <- par
+        }
+      }
+      return(loglik)
+    }
+    if (gradient) {
+      gr <- function(par, env) {
+        gr_loglik <- gr_MLE(
+          trend.type = trend.type,
           par = par,
           X = X,
           t = t,
           Y = Y,
           l = l,
           covtype = covtype,
-          mean.known,
+          myregF = myregF,
+          mean.known = mean.known,
           H.known = H.known,
           iso = iso,
           nugget = nugget
         )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
+        return(gr_loglik)
       }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_MLE_SK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            l = l,
-            covtype = covtype,
-            mean.known,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
+    } else gr <- NULL
+    lower.params <- log(c(lower_phisq, lower_phisq, 1e-4 / max(t)^l))
+    upper.params <- log(c(upper_phisq, upper_phisq, 1e4 / max(t)^l))
+  } else {
+    fn <- function(par, env) {
+      loglik <- MLE(
+        trend.type = trend.type,
+        par = c(par, rep(1, d), 0, 0.5),
+        X = X,
+        t = t,
+        Y = Y,
+        l = l,
+        covtype = covtype,
+        myregF = myregF,
+        mean.known,
+        H.known = H.known,
+        iso = iso,
+        nugget = nugget
+      )
+      if (!is.null(env) && !is.na(loglik)) {
+        if (is.null(env$min_loglik) || loglik > env$min_loglik) {
+          env$min_loglik <- loglik
+          env$arg_min <- par
         }
-      } else gr <- NULL
-      lower.params <- log(c(lower_phisq, lower_phisq, 1e-4 / max(t)^l))
-      upper.params <- log(c(upper_phisq, upper_phisq, 1e4 / max(t)^l))
-    } else {
-      fn <- function(par, env) {
-        loglik <- MLE_SK(
+      }
+      return(loglik)
+    }
+    if (gradient) {
+      gr <- function(par, env) {
+        gr_loglik <- gr_MLE(
+          trend.type = trend.type,
           par = c(par, rep(1, d), 0, 0.5),
           X = X,
           t = t,
           Y = Y,
           l = l,
           covtype = covtype,
-          mean.known,
-          H.known = H.known,
-          iso = iso,
-          nugget = nugget
-        )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
-      }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_MLE_SK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            l = l,
-            covtype = covtype,
-            mean.known,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
-        }
-      } else gr <- NULL
-      lower.params <- log(lower_phisq)
-      upper.params <- log(upper_phisq)
-    }
-  } else if (trend.type == "OK") {
-    if (!single_fidelity) {
-      fn <- function(par, env) {
-        loglik <- RMLE_OK(
-          par = par,
-          X = X,
-          t = t,
-          Y = Y,
           myregF = myregF,
-          l = l,
-          covtype = covtype,
+          mean.known = mean.known,
           H.known = H.known,
           iso = iso,
           nugget = nugget
         )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
+        return(gr_loglik)
       }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_RMLE_OK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            myregF = myregF,
-            l = l,
-            covtype = covtype,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
-        }
-      } else gr <- NULL
-      lower.params <- log(c(lower_phisq, lower_phisq, 1e-4 / max(t)^l))
-      upper.params <- log(c(upper_phisq, upper_phisq, 1e4 / max(t)^l))
-    } else {
-      fn <- function(par, env) {
-        loglik <- RMLE_OK(
-          par = c(par, rep(1, d), 0, 0.5),
-          X = X,
-          t = t,
-          Y = Y,
-          myregF = myregF,
-          l = l,
-          covtype = covtype,
-          H.known = H.known,
-          iso = iso,
-          nugget = nugget
-        )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
-      }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_RMLE_OK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            myregF = myregF,
-            l = l,
-            covtype = covtype,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
-        }
-      } else gr <- NULL
-      lower.params <- log(lower_phisq)
-      upper.params <- log(upper_phisq)
-    }
-  } else if (trend.type == "UK") {
-    if (!single_fidelity) {
-      fn <- function(par, env) {
-        loglik <- RMLE_UK(
-          par = par,
-          X = X,
-          t = t,
-          Y = Y,
-          myregF = myregF,
-          l = l,
-          covtype = covtype,
-          H.known = H.known,
-          iso = iso,
-          nugget = nugget
-        )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
-      }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_RMLE_UK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            myregF = myregF,
-            l = l,
-            covtype = covtype,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
-        }
-      } else gr <- NULL
-      lower.params <- log(c(lower_phisq, lower_phisq, 1e-4 / max(t)^l))
-      upper.params <- log(c(upper_phisq, upper_phisq, 1e4 / max(t)^l))
-    } else {
-      fn <- function(par, env) {
-        loglik <- RMLE_UK(
-          par = c(par, rep(1, d), 0, 0.5),
-          X = X,
-          t = t,
-          Y = Y,
-          myregF = myregF,
-          l = l,
-          covtype = covtype,
-          H.known = H.known,
-          iso = iso,
-          nugget = nugget
-        )
-        if (!is.null(env) && !is.na(loglik)) {
-          if (is.null(env$min_loglik) || loglik > env$min_loglik) {
-            env$min_loglik <- loglik
-            env$arg_min <- par
-          }
-        }
-        return(loglik)
-      }
-      if (gradient) {
-        gr <- function(par, env) {
-          gr_loglik <- gr_RMLE_UK(
-            par = par,
-            X = X,
-            t = t,
-            Y = Y,
-            myregF = myregF,
-            l = l,
-            covtype = covtype,
-            H.known = H.known,
-            iso = iso,
-            nugget = nugget
-          )
-          return(gr_loglik)
-        }
-      } else gr <- NULL
-      lower.params <- log(lower_phisq)
-      upper.params <- log(upper_phisq)
-    }
+    } else gr <- NULL
+    lower.params <- log(lower_phisq)
+    upper.params <- log(upper_phisq)
   }
-  if (is.null(H.known) && is.null(param.known)) {
+  if (is.null(H.known)) {
     if (!single_fidelity) {
       par <- c(log(c(myphi1sq, myphi2sq, mytausq)), myH)
       lower.par <- c(lower.params, eps)
-      upper.par <- c(upper.params, 1)
+      upper.par <- c(upper.params, 1 - eps)
     } else {
       par <- log(myphi1sq)
       lower.par <- lower.params
       upper.par <- upper.params
     }
-  } else if (!is.null(H.known) && is.null(param.known)) {
+  } else if (!is.null(H.known)) {
     par <- log(c(myphi1sq, myphi2sq, mytausq))
     lower.par <- lower.params
     upper.par <- upper.params
   }
-  if (is.null(H.known) || is.null(param.known)) {
-    res <- try(optim(
-      par = par,
-      fn = fn,
-      method = "L-BFGS-B",
-      lower = lower.par,
-      upper = upper.par,
-      gr = gr,
-      env = envtmp
-    ))
-    if (is(res, "try-error")) {
-      res <- list(
-        par = envtmp$arg_min,
-        value = envtmp$min_loglik,
-        counts = NA,
-        message = "Optimization stopped due to NAs,
+  res <- try(optim(
+    par = par,
+    fn = fn,
+    method = "L-BFGS-B",
+    lower = lower.par,
+    upper = upper.par,
+    gr = gr,
+    env = envtmp
+  ))
+  if (is(res, "try-error")) {
+    res <- list(
+      par = envtmp$arg_min,
+      value = envtmp$min_loglik,
+      counts = NA,
+      message = "Optimization stopped due to NAs,
                   use best value so far"
-      )
-    }
-    pars <- res$par
-    if (!single_fidelity) {
-      if (!iso) {
-        phi1sq <- exp(pars[1:d])
-        phi2sq <- exp(pars[(d + 1):(2 * d)])
-        tausq <- exp(pars[2 * d + 1])
-        if (is.null(H.known)) H <- pars[2 * d + 2] else H <- H.known
-      } else {
-        phi1sq <- exp(rep(pars[1], d))
-        phi2sq <- exp(rep(pars[2], d))
-        tausq <- exp(pars[3])
-        if (is.null(H.known)) H <- pars[4] else H <- H.known
-      }
-    } else {
-      if (!iso) {
-        phi1sq <- exp(pars[1:d])
-        phi2sq <- rep(0, d)
-        tausq <- 0
-        H <- 0
-      } else {
-        phi1sq <- exp(rep(pars[1], d))
-        phi2sq <- rep(0, d)
-        tausq <- 0
-        H <- 0
-      }
-    }
+    )
   }
-  if (!is.null(H.known) && !is.null(param.known)) {
+  pars <- res$par
+  if (!single_fidelity) {
     if (!iso) {
-      phi1sq <- param.known[1:d]
-      phi2sq <- param.known[(d + 1):(2 * d)]
-      sigma1sq <- param.known[2 * d + 1]
-      sigma2sq <- param.known[2 * d + 2]
-      H <- H.known
+      phi1sq <- exp(pars[1:d])
+      phi2sq <- exp(pars[(d + 1):(2 * d)])
+      tausq <- exp(pars[2 * d + 1])
+      if (is.null(H.known)) H <- pars[2 * d + 2] else H <- H.known
     } else {
-      phi1sq <- rep(param.known[1], d)
-      phi2sq <- rep(param.known[2], d)
-      sigma1sq <- param.known[3]
-      sigma2sq <- param.known[4]
-      H <- H.known
+      phi1sq <- exp(rep(pars[1], d))
+      phi2sq <- exp(rep(pars[2], d))
+      tausq <- exp(pars[3])
+      if (is.null(H.known)) H <- pars[4] else H <- H.known
+    }
+  } else {
+    if (!iso) {
+      phi1sq <- exp(pars[1:d])
+      phi2sq <- rep(0, d)
+      tausq <- 0
+      H <- 0
+    } else {
+      phi1sq <- exp(rep(pars[1], d))
+      phi2sq <- rep(0, d)
+      tausq <- 0
+      H <- 0
     }
   }
-  if (is.null(param.known)) {
-    myK <- cov_gen(
-      x1 = X,
-      t1 = t,
-      phi1sq = phi1sq,
-      phi2sq = phi2sq,
-      sigma1sq = 1,
-      sigma2sq = tausq,
-      l = l,
-      covtype = covtype,
-      H = H,
-      iso = iso,
-      nugget = nugget
-    )
-  } else {
-    myK <- cov_gen(
-      x1 = X,
-      t1 = t,
-      phi1sq = phi1sq,
-      phi2sq = phi2sq,
-      sigma1sq = sigma1sq,
-      sigma2sq = sigma2sq,
-      l = l,
-      covtype = covtype,
-      H = H,
-      iso = iso,
-      nugget = nugget
-    )
-  }
+  if (!is.null(H.known)) H <- H.known
+  myK <- cov_gen(
+    x1 = X,
+    t1 = t,
+    phi1sq = phi1sq,
+    phi2sq = phi2sq,
+    sigma1sq = 1,
+    sigma2sq = tausq,
+    l = l,
+    covtype = covtype,
+    H = H,
+    iso = iso,
+    nugget = nugget
+  )
   Ki <- chol2inv(chol(myK))
   if (trend.type %in% c("OK", "UK")) {
     myKiF <- Ki %*% myregF
@@ -562,26 +367,24 @@ MuFiMeshGP <- function(
     myWi <- chol2inv(chol(myW))
     beta <- tcrossprod(myWi, myKiF) %*% Y
   }
-  if (is.null(param.known)) {
-    if (trend.type == "SK") tmp <- (Y - mean.known) else
-      tmp <- Y - myregF %*% beta
-    sigma1sq <- c(crossprod(tmp, Ki) %*% tmp) / (n - p)
-    sigma2sq <- tausq * sigma1sq
-    myK <- cov_gen(
-      x1 = X,
-      t1 = t,
-      phi1sq = phi1sq,
-      phi2sq = phi2sq,
-      sigma1sq = sigma1sq,
-      sigma2sq = sigma2sq,
-      l = l,
-      covtype = covtype,
-      H = H,
-      iso = iso,
-      nugget = nugget
-    )
-    Ki <- chol2inv(chol(myK))
-  }
+  if (trend.type == "SK") tmp <- (Y - mean.known) else
+    tmp <- Y - myregF %*% beta
+  sigma1sq <- c(crossprod(tmp, Ki) %*% tmp) / (n - p)
+  sigma2sq <- tausq * sigma1sq
+  myK <- cov_gen(
+    x1 = X,
+    t1 = t,
+    phi1sq = phi1sq,
+    phi2sq = phi2sq,
+    sigma1sq = sigma1sq,
+    sigma2sq = sigma2sq,
+    l = l,
+    covtype = covtype,
+    H = H,
+    iso = iso,
+    nugget = nugget
+  )
+  Ki <- chol2inv(chol(myK))
   if (is.null(H.known)) {
     if (trend.type == "SK") {
       estiP = list(
@@ -633,7 +436,6 @@ MuFiMeshGP <- function(
       trend.pol = trend.pol,
       interaction = interaction,
       H.known = H.known,
-      param.known = param.known,
       param.bounds = param.bounds,
       mean.known = mean.known,
       l = l,
