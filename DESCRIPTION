@@ -11,7 +11,7 @@ Description: Multi-Fidelity emulator for data from computer simulations of the
     where both the input locations and fidelity level can be continuous. Active
     Learning can be performed with an implementation of the IMSPE 
     criterion developed by Boutelet and Sung (2025, <doi:10.48550/arXiv.2503.23158>).
-License: GPL (>= 2)
+License: LGPL (>= 2)
 Encoding: UTF-8
 Imports: lhs, parallel, methods, Rcpp
 LinkingTo: Rcpp, RcppArmadillo
