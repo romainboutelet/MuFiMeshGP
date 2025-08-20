@@ -118,6 +118,9 @@ cov_auto <- function(
 #'
 #' @noRd
 
+## All the functions in this file are based on code from the package hetGP,
+## licensed under the LGPL-3 license
+
 find_reps <- function(
   X,
   Z,
